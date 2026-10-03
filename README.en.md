@@ -20,6 +20,7 @@ WinForms GUI, .NET 8, C#, **zero NuGet dependencies** (pure Win32 + COM interop)
 - ✅ **Hot-reload config**: edit `targets.txt` manually and it reloads automatically, kept in sync with the checkboxes both ways
 - ✅ **Smart restore**: removing a process from the list restores its audio; only the mute bit is toggled — system volume is never touched
 - ✅ **Device resilient**: automatically rebuilds the audio-session controller when the default device changes or the COM session goes stale
+- ✅ **Minimize to tray**: closing the window only tucks the app into the tray; exiting requires the tray menu, so the mute guard can't be closed by accident
 
 ## Usage
 
@@ -32,7 +33,7 @@ Run `WindowFocusMute.exe` (built to the project root), then:
 
 To find a process name: Task Manager → "Details" tab → "Name" column, without the `.exe` suffix.
 
-Closing the window exits the app.
+**Closing the window = minimize to tray** (muting keeps running in the background). To actually quit, right-click the blue speaker icon in the tray → "Exit"; double-click the tray icon to bring the window back anytime.
 
 ## Configuration
 
@@ -88,7 +89,7 @@ targets.txt           Runtime-maintained process list
 - Windows running elevated (as administrator) may not be resolvable to a process name (focus detection skips them).
 - The 200 ms poll can feel slightly laggy on very fast switching; `SetWinEventHook` (event-driven) would be more responsive.
 - A tray-minimized (windowless) process stays on the list, but muting only triggers once it has been focused and then switched away from.
-- Todo candidates: minimize to tray, start with Windows, restore mute state for listed processes on startup, multiple output devices.
+- Todo candidates: start with Windows, restore mute state for listed processes on startup, multiple output devices.
 
 ## Requirements
 
