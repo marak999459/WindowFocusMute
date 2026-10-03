@@ -15,6 +15,11 @@ internal sealed class MainForm : Form
     private readonly TextBox _logBox;
     private readonly CheckBox _showAllCheckBox;
     private readonly Label _statusLabel;
+    private readonly NotifyIcon _trayIcon;
+    private readonly ContextMenuStrip _trayMenu;
+
+    /// <summary>用户点了托盘"退出"，此后关闭窗口真正退出。</summary>
+    private bool _realExit;
 
     /// <summary>同步勾选状态期间为 true，抑制 ItemChecked 事件。</summary>
     private bool _uiReady;
@@ -106,9 +111,54 @@ internal sealed class MainForm : Form
         Controls.Add(_logBox);
         Controls.Add(tip);
 
+        // ---- 托盘图标与菜单：关窗最小化到托盘，退出必须走托盘菜单 ----
+        _trayMenu = new ContextMenuStrip();
+        _trayMenu.Items.Add("显示主窗口", null, (_, _) => ShowFromTray());
+        _trayMenu.Items.Add(new ToolStripSeparator());
+        var exitItem = new ToolStripMenuItem("退出", null, (_, _) =>
+        {
+            _realExit = true;
+            Close();
+        });
+        _trayMenu.Items.Add(exitItem);
+
+        _trayIcon = new NotifyIcon
+        {
+            Icon = Icon,
+            Text = "WindowFocusMute — 失焦静音",
+            Visible = true,
+            ContextMenuStrip = _trayMenu,
+        };
+        _trayIcon.DoubleClick += (_, _) => ShowFromTray();
+
         // ---- 事件接线 ----
         _engine.Log += msg => BeginInvoke(() => AppendLog(msg));
         _engine.TargetsChanged += _ => BeginInvoke(() => SyncCheckStates());
+    }
+
+    private void ShowFromTray()
+    {
+        Show();
+        WindowState = FormWindowState.Normal;
+        Activate();
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+
+        // 托盘菜单"退出"以外的一切关闭请求（点 X、Alt+F4、任务栏关闭）都转为最小化到托盘
+        if (!_realExit && e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            Hide();
+            AppendLog("已最小化到托盘 — 双击托盘图标恢复，退出请用托盘图标右键菜单。");
+            return;
+        }
+
+        // 真正退出：清掉托盘图标，否则会残留到鼠标划过
+        _trayIcon.Visible = false;
+        _trayIcon.Dispose();
     }
 
     protected override void OnLoad(EventArgs e)
