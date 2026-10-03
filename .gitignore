@@ -1,0 +1,16 @@
+# Build artifacts
+bin/
+obj/
+publish/
+
+# Runtime-maintained config (generated next to exe)
+targets.txt
+
+# Rider / VS
+.idea/
+.vs/
+*.user
+
+# OS
+Thumbs.db
+Desktop.ini

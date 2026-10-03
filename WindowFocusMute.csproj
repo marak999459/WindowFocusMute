@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>WindowFocusMute</AssemblyName>
+    <RootNamespace>WindowFocusMute</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <OutputPath>.\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- 发布单文件可执行: dotnet publish -c Release -r win-x64 -p:PublishSingleFile=true -p:SelfContained=false -->
+  </PropertyGroup>
+
+</Project>
