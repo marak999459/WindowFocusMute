@@ -18,7 +18,8 @@ Windows 桌面小工具：**名单内进程的窗口失去焦点时自动静音�
 |---|---|
 | 图形界面：进程列表勾选即保存生效 | ✅ |
 | 进程列表显示每个进程的 exe 图标 | ✅ |
-| 列表显示 PID、窗口标题；可切换「显示所有进程」 | ✅ || targets.txt 手动编辑热重载（双向同步勾选状态） | ✅ |
+| 列表显示 PID、窗口标题；可切换「显示所有进程」 | ✅ |
+| targets.txt 手动编辑热重载（双向同步勾选状态） | ✅ |
 | 名单内已退出进程显示「(未运行)」并保持勾选 | ✅ |
 | 移出名单时自动恢复该进程声音 | ✅ |
 | 程序图标（蓝色喇叭）与 exe 图标 | ✅ |
@@ -26,6 +27,7 @@ Windows 桌面小工具：**名单内进程的窗口失去焦点时自动静音�
 | 失焦静音实测生效（曾因接口 vtable 顺序错误静音无效，已修复） | ✅ |
 | 进程列表按任务栏标准过滤（可见 + 非工具窗口 + 未遮蔽 + 无属主），不再出现纯后台进程 | ✅ |
 | 关闭窗口最小化到托盘（点 X 隐藏，退出必须走托盘右键菜单） | ✅ |
+| 后启动的进程也能静音（会话快照过期自动重建控制器重试） | ✅ |
 
 ## 三、构建与运行
 
@@ -56,6 +58,7 @@ targets.txt           运行时生成/维护的名单（根目录）
 - **MuteEngine 与 UI 完全解耦**：UI 通过 `engine.Add/Remove/Targets` 操作名单，通过 `Log` / `TargetsChanged` 事件接收通知。加托盘、改界面都不用动引擎。
 - **勾选链路**：ListView `ItemChecked` → `engine.Add/Remove` → 写 `targets.txt` → `TargetsChanged` 事件 → `SyncCheckStates` 回填勾选（用 `_uiReady` 标志防止事件风暴）。
 - **静音链路**：`IAudioSessionManager2.GetSessionEnumerator` 枚举默认输出设备的会话 → `IAudioSessionControl2.GetProcessId` → `Process.GetProcessById` 拿进程名 → 命中名单则 `ISimpleAudioVolume.SetMute`。只切静音位，不碰音量值。
+- **旧会话快照问题（已修，"软件先于游戏启动就失效"的根因）**：`AudioController` 缓存的会话管理器拿到的会话列表是快照，**晚于控制器创建的进程**（先开软件后开游戏）不在快照里，枚举命中 0 个但 COM 调用全部 S_OK。修复：`SetProcessMute` 拆出 `TryApplyMute` 返回是否命中，命中 0 且目标进程存活时 `_audio = null` 重建控制器立即重试一次——无论快照多旧都能自愈。另外 `ReloadIfConfigChanged` 曾定义后从未被调用（热重载失效），已接入 `PollTick`。
 - **互操作注意**：COM 接口全用 `[PreserveSig] int` 返回 HRESULT；拿 `ISimpleAudioVolume` 要走 `Marshal.QueryInterface`（RCW 类型化接口没有直接 QI 方法，之前踩过）；接口可访问性必须一致（public 方法不能暴露 private 接口类型，之前踩过）。
 - **进程列表的"任务栏标准"过滤**：`Win32.GetTaskbarWindows()` 用 `EnumWindows` 从窗口侧枚举（判定：`IsWindowVisible` + 标题非空 + 非 `WS_EX_TOOLWINDOW` 或有 `WS_EX_APPWINDOW` + 无属主窗口 + DWM 未 cloaked），再映射到进程。**不要**改回用 `Process.MainWindowHandle != 0` 判断——那会把 TextInputHost、echo-client 之类有隐藏窗口的后台进程也列出来；也不能只加 `IsWindowVisible`——ApplicationFrameHost（UWP 壳）、工具窗口仍是"可见"的但不进任务栏。勾选「显示所有进程」才回退到全进程枚举。
 - **托盘最小化**：`OnFormClosing` 里用 `_realExit` 标志区分——点 X/Alt+F4（`CloseReason.UserClosing` 且非 `_realExit`）时 `e.Cancel=true` + `Hide()`；只有托盘菜单「退出」先置 `_realExit=true` 再 `Close()` 才真正退出，退出时必须 `_trayIcon.Dispose()` 否则托盘残留幽灵图标。**测试注意**：自动化测试要发 `WM_SYSCOMMAND+SC_CLOSE`（真实点 X 的路径）才算数；直接 `PostMessage(WM_CLOSE)` 会绕过 WinForms 的 UserClosing 判定直接退进程，结果误报。

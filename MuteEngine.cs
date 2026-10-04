@@ -88,6 +88,8 @@ internal sealed class MuteEngine : IDisposable
     {
         try
         {
+            ReloadIfConfigChanged();
+
             uint pid = Win32.GetForegroundProcessId();
             string name = GetProcessName(pid);
 
@@ -121,13 +123,27 @@ internal sealed class MuteEngine : IDisposable
         if (!force && _mutedState.TryGetValue(processName, out bool was) && was == muted)
             return;
 
+        if (!TryApplyMute(processName, muted))
+        {
+            // 命中 0 个会话但进程明明在运行 → 控制器是旧快照（进程比控制器晚启动），
+            // 重建控制器立即重试一次；仍失败则下轮轮询再试
+            Log?.Invoke($"{processName} 未找到音频会话，重建音频控制器后重试…");
+            _audio = null;
+            if (TryApplyMute(processName, muted))
+                return;
+            Log?.Invoke($"{processName} 重试后仍未找到会话（进程可能刚退出或尚无音频输出），下轮继续。");
+        }
+    }
+
+    private bool TryApplyMute(string processName, bool muted)
+    {
         if (_audio is null)
         {
             _audio = CoreAudioInterop.CreateController();
             if (_audio is null)
             {
                 Log?.Invoke("无法访问音频设备，稍后重试。");
-                return;
+                return false;
             }
         }
 
@@ -147,11 +163,15 @@ internal sealed class MuteEngine : IDisposable
             // 设备可能被拔插，丢弃控制器，下轮重建
             _audio = null;
             Log?.Invoke($"音频会话异常，{processName} 本轮未设置，将自动重试。");
-            return;
+            return false;
         }
+
+        if (hitCount == 0)
+            return false;
 
         _mutedState[processName] = muted;
         Log?.Invoke($"{processName} -> {(muted ? "已静音 (失焦)" : "恢复声音 (聚焦)")} [命中会话 {hitCount}/{total}]");
+        return true;
     }
 
     private static string GetProcessName(uint pid)
